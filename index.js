@@ -2,10 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
+const nodemailer = require('nodemailer')
+// KM4C8EBSCRTZ6QVGPJFD388E
+// SQF117WTW6ZUGVWWCWVL9DYC
+const mg = require('nodemailer-mailgun-transport');
 const jwt = require('jsonwebtoken')
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 6000;
 
 
 const app = express();
@@ -22,6 +26,46 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
+
+
+function sendAppointmentEmail(booking) {
+    const { email, treatment, appointmentDate, slot } = booking;
+    const formattedDate = new Date(appointmentDate).toLocaleDateString('en-us', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    })
+    const auth = {
+        auth: {
+            api_key: process.env.EMAIL_SEND_API_KEY,
+            domain: process.env.EMAIL_SEND_DOMAIN
+        }
+    }
+    const transport = nodemailer.createTransport(mg(auth));
+
+    /*const transport = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });*/
+    const mailOptions = {
+        from: 'rhr277@gmail.com',
+        to: email || 'rhr277@gmail.com',
+        subject: `Your Appointment on ${formattedDate} is confirmed`,
+        text: `Hello Your Appointment on ${formattedDate} at ${slot} is confirmed.`
+    }
+
+    transport.sendMail(mailOptions, function (err, data) {
+        if (err) {
+            console.log('Error Occurs', err);
+        } else {
+            console.log('Email sent successfully', data);
+        }
+    })
+}
+
 
 function verifyJWT(req, res, next) {
 
@@ -172,6 +216,8 @@ async function run() {
             }
 
             const result = await bookingsCollection.insertOne(booking);
+            //send email about appointment confirmation
+            sendAppointmentEmail(booking);
             res.send(result);
         });
         app.get('/bookings/:id', async (req, res) => {
